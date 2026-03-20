@@ -17,7 +17,9 @@ export const NODES: BootstrapNode[] = [
     region: "us-central1",
     ip: "34.16.64.99",
     aggregatorUrl: "https://api.0x01.world",
-    nodeUrl: "https://us1.0x01.world",
+    // REST proxied server-side via /api/proxy/node (avoids mixed-content from HTTPS panel).
+    // WS inbox unavailable until us1.0x01.world DNS + TLS is configured.
+    nodeUrl: "proxy:34.16.64.99",
     apiSecret: null,
   },
   {
@@ -26,7 +28,9 @@ export const NODES: BootstrapNode[] = [
     region: "europe-west1",
     ip: "34.78.245.208",
     aggregatorUrl: "https://api.0x01.world",
-    nodeUrl: "https://eu1.0x01.world",
+    // REST proxied server-side via /api/proxy/node.
+    // WS inbox unavailable until eu1.0x01.world DNS + TLS is configured.
+    nodeUrl: "proxy:34.78.245.208",
     apiSecret: null,
   },
   {
