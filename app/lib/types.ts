@@ -17,7 +17,7 @@ export const NODES: BootstrapNode[] = [
     region: "us-central1",
     ip: "34.16.64.99",
     aggregatorUrl: "https://api.0x01.world",
-    nodeUrl: "https://api.0x01.world/node",
+    nodeUrl: "https://us1.0x01.world",
     apiSecret: null,
   },
   {
@@ -26,12 +26,12 @@ export const NODES: BootstrapNode[] = [
     region: "europe-west1",
     ip: "34.78.245.208",
     aggregatorUrl: "https://api.0x01.world",
-    nodeUrl: null, // HTTP only — use proxy
+    nodeUrl: "https://eu1.0x01.world",
     apiSecret: null,
   },
   {
     id: "ap",
-    label: "AP-SOUTH",
+    label: "AP-SE",
     region: "asia-southeast1",
     ip: "136.110.15.224",
     aggregatorUrl: "https://api.0x01.world",
@@ -105,6 +105,14 @@ export interface ProposeRequest {
   deadline_secs?: number;
 }
 
+export interface BountySubmission {
+  agentId: string;
+  agentName?: string;
+  status: "accepted" | "delivered" | "rejected" | "feedback_sent";
+  payloadB64?: string;
+  receivedAt: number;
+}
+
 export interface BountyHistoryEntry {
   conversationId: string;
   recipient: string;
@@ -115,6 +123,7 @@ export interface BountyHistoryEntry {
   sentFrom: string;
   status: "proposed" | "accepted" | "delivered" | "rejected" | "feedback_sent";
   deadlineAt?: number;
+  submissions?: BountySubmission[];
 }
 
 // ── Node health ─────────────────────────────────────────────────────────────
@@ -161,6 +170,75 @@ export interface Notification {
   conversationId?: string;
 }
 
+// ── Treasury / Billing ──────────────────────────────────────────────────────
+
+export interface BillingAccount {
+  account_id: string;
+  balance_usdc: number;
+  tier: "free" | "builder" | "scale" | "enterprise";
+  payment_method: string | null;
+  preferred_chain: number | null;
+  payout_address: string | null;
+  /** When true, withdrawals bypass Circle CCTP — operator handles payout off-band. */
+  skip_settlement: boolean;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface BillingTransaction {
+  id: number;
+  account_id: string;
+  tx_type: string;
+  amount_usdc: number;
+  payment_method: string;
+  reference: string | null;
+  chain_domain: number | null;
+  status: string;
+  created_at: number;
+}
+
+export interface SettlementEntry {
+  id: number;
+  conversation_id: string;
+  payer_account: string;
+  payee_account: string;
+  amount_usdc: number;
+  fee_usdc: number;
+  dest_chain: number | null;
+  dest_address: string | null;
+  status: "pending" | "processing" | "completed" | "failed";
+  cctp_tx_hash: string | null;
+  created_at: number;
+  completed_at: number | null;
+}
+
+export interface RevenueStats {
+  total_deposits_usdc: number;
+  total_withdrawals_usdc: number;
+  total_fees_usdc: number;
+  total_settled_usdc: number;
+  account_count: number;
+  pending_settlements: number;
+  tier_counts: Record<string, number>;
+}
+
+export const CHAIN_NAMES: Record<number, string> = {
+  0: "Ethereum",
+  1: "Avalanche",
+  2: "Optimism",
+  3: "Arbitrum",
+  5: "Solana",
+  6: "Base",
+  7: "Polygon",
+  11: "Linea",
+  12: "Sei",
+  16: "Unichain",
+  25: "World Chain",
+  1420: "HyperEVM",
+  64165: "Sonic",
+  65536: "Ink",
+};
+
 // ── Config ──────────────────────────────────────────────────────────────────
 
 export interface PanelConfig {
@@ -190,6 +268,7 @@ export const MSG_COLORS: Record<string, string> = {
   VERDICT: "text-cyan-400",
   JOIN: "text-[var(--sub)]",
   DISCOVER: "text-teal-400",
+  BROADCAST: "text-orange-400",
 };
 
 export function shortId(id: string) {

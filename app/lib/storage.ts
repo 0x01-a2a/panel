@@ -93,9 +93,11 @@ export function exportCsv(
     columns
       .map((c) => {
         const v = String(r[c] ?? "");
-        return v.includes(",") || v.includes('"')
-          ? `"${v.replace(/"/g, '""')}"`
-          : v;
+        // Prefix formula-injection chars to prevent spreadsheet code execution (M-6).
+        const safe = /^[=+\-@|`]/.test(v) ? `'${v}` : v;
+        return safe.includes(",") || safe.includes('"')
+          ? `"${safe.replace(/"/g, '""')}"`
+          : safe;
       })
       .join(",")
   );

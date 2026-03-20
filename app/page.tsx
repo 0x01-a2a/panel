@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { NODES } from "./lib/types";
 import { loadSecrets, saveSecrets } from "./lib/storage";
 import { useAgents } from "./lib/hooks/useAgents";
@@ -17,6 +17,7 @@ import { AnalyticsTab } from "./components/analytics/AnalyticsTab";
 import { NodeHealthTab } from "./components/nodes/NodeHealthTab";
 import { ExemptListPanel } from "./components/admin/ExemptListPanel";
 import { ExportPanel } from "./components/admin/ExportPanel";
+import { TreasuryTab } from "./components/treasury/TreasuryTab";
 
 // ── Settings panel ──────────────────────────────────────────────────────────
 
@@ -58,10 +59,12 @@ function NotificationBell({
   active,
   dismiss,
   dismissAll,
+  onConversationClick,
 }: {
   active: ReturnType<typeof useNotifications>["active"];
   dismiss: (id: string) => void;
   dismissAll: () => void;
+  onConversationClick: (conversationId: string) => void;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -103,7 +106,13 @@ function NotificationBell({
             active.map((n) => (
               <div
                 key={n.id}
-                className="px-3 py-2 border-b border-[var(--border)] last:border-0"
+                className={`px-3 py-2 border-b border-[var(--border)] last:border-0 ${n.conversationId ? "cursor-pointer hover:bg-[var(--bg)]" : ""}`}
+                onClick={() => {
+                  if (n.conversationId) {
+                    onConversationClick(n.conversationId);
+                    setOpen(false);
+                  }
+                }}
               >
                 <div className="flex items-center gap-2 mb-0.5">
                   <span
@@ -119,8 +128,11 @@ function NotificationBell({
                   >
                     {n.title}
                   </span>
+                  {n.conversationId && (
+                    <span className="text-[8px] text-[var(--green)] ml-1">→ REVIEW</span>
+                  )}
                   <button
-                    onClick={() => dismiss(n.id)}
+                    onClick={(e) => { e.stopPropagation(); dismiss(n.id); }}
                     className="ml-auto text-[8px] text-[var(--dim)] hover:text-[var(--text)]"
                   >
                     X
@@ -138,12 +150,13 @@ function NotificationBell({
 
 // ── Main page ───────────────────────────────────────────────────────────────
 
-type Tab = "mesh" | "bounty" | "inbox" | "activity" | "analytics" | "nodes" | "admin";
+type Tab = "mesh" | "bounty" | "inbox" | "activity" | "analytics" | "nodes" | "treasury" | "admin";
 
 export default function Home() {
   const [tab, setTab] = useState<Tab>("mesh");
   const [showSettings, setShowSettings] = useState(false);
   const [secrets, setSecrets] = useState<Record<string, string>>({});
+  const [pendingReviewConv, setPendingReviewConv] = useState<string | null>(null);
 
   // Load secrets from localStorage on mount
   useEffect(() => {
@@ -175,6 +188,7 @@ export default function Home() {
     history: bountyHistory,
     add: addBounty,
     updateStatus: updateBountyStatus,
+    updateSubmissionStatus,
     handleEnvelope,
   } = useBountyHistory();
   const {
@@ -183,23 +197,31 @@ export default function Home() {
     pingAll,
   } = useNodeHealth();
   const { active: activeNotifs, dismiss, dismissAll, push } = useNotifications();
+  // Track which envelopes have already been processed to avoid re-firing on re-renders.
+  const processedEnvsRef = useRef(new Set<string>());
 
-  // Auto-update bounty history when new envelopes arrive
+  // Auto-update bounty history when new envelopes arrive.
+  // Process ALL new envelopes, not just the most recent one (M-2).
   useEffect(() => {
     if (envelopes.length === 0) return;
-    const latest = envelopes[0];
-    handleEnvelope(latest);
+    for (const env of envelopes) {
+      // Deduplicate by conversation_id + msg_type (same pair won't push twice).
+      const key = `${env.conversation_id}:${env.msg_type}`;
+      if (processedEnvsRef.current.has(key)) continue;
+      processedEnvsRef.current.add(key);
 
-    // Push notifications for important events
-    if (latest.msg_type === "ACCEPT") {
-      push("success", "ACCEPTED", `Agent ${latest.sender.slice(0, 8)} accepted bounty`, latest.conversation_id);
-    } else if (latest.msg_type === "DELIVER") {
-      push("info", "DELIVERED", `Agent ${latest.sender.slice(0, 8)} submitted delivery`, latest.conversation_id);
-    } else if (latest.msg_type === "REJECT") {
-      push("warning", "REJECTED", `Agent ${latest.sender.slice(0, 8)} rejected bounty`, latest.conversation_id);
+      handleEnvelope(env);
+
+      if (env.msg_type === "ACCEPT") {
+        push("success", "ACCEPTED", `Agent ${env.sender.slice(0, 8)} accepted bounty`, env.conversation_id);
+      } else if (env.msg_type === "DELIVER") {
+        push("info", "DELIVERED", `Agent ${env.sender.slice(0, 8)} submitted delivery`, env.conversation_id);
+      } else if (env.msg_type === "REJECT") {
+        push("warning", "REJECTED", `Agent ${env.sender.slice(0, 8)} rejected bounty`, env.conversation_id);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [envelopes.length]);
+  }, [envelopes]);
 
   const tabs: { id: Tab; label: string; badge?: number }[] = [
     { id: "mesh", label: "MESH" },
@@ -212,6 +234,7 @@ export default function Home() {
     { id: "activity", label: "FEED" },
     { id: "nodes", label: "NODES" },
     { id: "analytics", label: "ANALYTICS" },
+    { id: "treasury", label: "TREASURY" },
     { id: "admin", label: "ADMIN" },
   ];
 
@@ -239,6 +262,10 @@ export default function Home() {
               active={activeNotifs}
               dismiss={dismiss}
               dismissAll={dismissAll}
+              onConversationClick={(convId) => {
+                setTab("bounty");
+                setPendingReviewConv(convId);
+              }}
             />
             <button
               onClick={() => setShowSettings(!showSettings)}
@@ -305,6 +332,9 @@ export default function Home() {
             history={bountyHistory}
             addBounty={addBounty}
             envelopes={envelopes}
+            updateSubmissionStatus={updateSubmissionStatus}
+            openConversationId={pendingReviewConv}
+            onConversationOpened={() => setPendingReviewConv(null)}
           />
         )}
         {tab === "inbox" && (
@@ -312,7 +342,9 @@ export default function Home() {
             envelopes={envelopes}
             secrets={secrets}
             history={bountyHistory}
+            agents={agents}
             updateBountyStatus={updateBountyStatus}
+            updateSubmissionStatus={updateSubmissionStatus}
             clear={clearInbox}
           />
         )}
@@ -334,6 +366,7 @@ export default function Home() {
             recentAgentCount={recentCount}
           />
         )}
+        {tab === "treasury" && <TreasuryTab secrets={secrets} />}
         {tab === "admin" && (
           <div className="space-y-4">
             <ExemptListPanel secrets={secrets} />

@@ -1,8 +1,8 @@
 "use client";
-import { useState, useCallback } from "react";
-import type { Agent, BountyHistoryEntry } from "@/app/lib/types";
+import { useState, useCallback, useEffect } from "react";
+import type { Agent, BountyHistoryEntry, BountySubmission } from "@/app/lib/types";
 import { NODES, shortId } from "@/app/lib/types";
-import { sendPropose } from "@/app/lib/api";
+import { sendPropose, sendDiscover } from "@/app/lib/api";
 import { ConversationThread } from "./ConversationThread";
 
 export function BountyTab({
@@ -11,12 +11,18 @@ export function BountyTab({
   history,
   addBounty,
   envelopes,
+  updateSubmissionStatus,
+  openConversationId,
+  onConversationOpened,
 }: {
   secrets: Record<string, string>;
   agents: Agent[];
   history: BountyHistoryEntry[];
   addBounty: (entry: BountyHistoryEntry) => void;
   envelopes: { msg_type: string; sender: string; conversation_id: string; payload_b64: string }[];
+  updateSubmissionStatus: (conversationId: string, agentId: string, status: BountySubmission["status"]) => void;
+  openConversationId?: string | null;
+  onConversationOpened?: () => void;
 }) {
   const sendNodes = NODES.filter((n) => n.nodeUrl && secrets[n.id]);
   const [selectedNode, setSelectedNode] = useState(sendNodes[0]?.id || "");
@@ -30,8 +36,15 @@ export function BountyTab({
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [broadcastMode, setBroadcastMode] = useState(false);
-  const [broadcastCount, setBroadcastCount] = useState("5");
   const [selectedConv, setSelectedConv] = useState<string | null>(null);
+
+  // Auto-open conversation when navigated from notification
+  useEffect(() => {
+    if (openConversationId) {
+      setSelectedConv(openConversationId);
+      onConversationOpened?.();
+    }
+  }, [openConversationId, onConversationOpened]);
   const [historyFilter, setHistoryFilter] = useState<"all" | BountyHistoryEntry["status"]>("all");
 
   const now = Date.now() / 1000;
@@ -41,49 +54,51 @@ export function BountyTab({
     const node = NODES.find((n) => n.id === selectedNode);
     if (!node?.nodeUrl || !secrets[node.id]) return;
 
+    // H-4: Validate payload fields before sending to the mesh.
+    const parsedAmount = parseFloat(amountUsdc);
+    if (isNaN(parsedAmount) || parsedAmount < 0 || parsedAmount > 10_000) {
+      setResult("ERROR: Amount must be between 0 and 10,000 USDC");
+      return;
+    }
+    if (!message.trim()) {
+      setResult("ERROR: Message is required");
+      return;
+    }
+    if (message.length > 2_000) {
+      setResult("ERROR: Message exceeds 2,000 character limit");
+      return;
+    }
+
     setSending(true);
     setResult(null);
 
     try {
       if (broadcastMode) {
-        const count = Math.min(parseInt(broadcastCount) || 5, onlineAgents.length);
-        const shuffled = [...onlineAgents].sort(() => Math.random() - 0.5);
-        const targets = shuffled.slice(0, count);
-        const results: string[] = [];
-
-        for (const agent of targets) {
-          try {
-            const res = await sendPropose(node.nodeUrl!, secrets[node.id], {
-              recipient: agent.agent_id,
-              message,
-              amount_usdc_micro: Math.round(parseFloat(amountUsdc) * 1_000_000),
-              deadline_secs: deadlineStr
-                ? Math.max(1, Math.round((new Date(deadlineStr).getTime() - Date.now()) / 1000))
-                : undefined,
-            });
-            results.push(`${shortId(agent.agent_id)}: ${res.conversation_id.slice(0, 8)}`);
-            addBounty({
-              conversationId: res.conversation_id,
-              recipient: agent.agent_id,
-              recipientName: agent.name,
-              message,
-              amountUsdc: parseFloat(amountUsdc),
-              sentAt: Date.now(),
-              sentFrom: node.label,
-              status: "proposed",
-            });
-          } catch (e: unknown) {
-            const msg = e instanceof Error ? e.message : String(e);
-            results.push(`${shortId(agent.agent_id)}: FAIL ${msg}`);
-          }
-        }
-        setResult(`Broadcast ${count}:\n${results.join("\n")}`);
+        // DISCOVER is a gossipsub broadcast — goes to all mesh peers
+        const res = await sendDiscover(node.nodeUrl!, secrets[node.id], {
+          message,
+          amount_usdc_micro: Math.round(parsedAmount * 1_000_000),
+          deadline_secs: deadlineStr
+            ? Math.max(1, Math.round((new Date(deadlineStr).getTime() - Date.now()) / 1000))
+            : undefined,
+        });
+        addBounty({
+          conversationId: res.conversation_id,
+          recipient: "broadcast",
+          recipientName: "ALL MESH",
+          message,
+          amountUsdc: parsedAmount,
+          sentAt: Date.now(),
+          sentFrom: node.label,
+          status: "proposed",
+        });
+        setResult(`DISCOVER broadcast via ${node.label} → conv ${res.conversation_id.slice(0, 12)}...`);
       } else {
         if (!recipient) return;
         const res = await sendPropose(node.nodeUrl!, secrets[node.id], {
           recipient,
           message,
-          amount_usdc_micro: Math.round(parseFloat(amountUsdc) * 1_000_000),
+          amount_usdc_micro: Math.round(parsedAmount * 1_000_000),
           deadline_secs: deadlineStr
             ? Math.max(1, Math.round((new Date(deadlineStr).getTime() - Date.now()) / 1000))
             : undefined,
@@ -95,7 +110,7 @@ export function BountyTab({
           recipientName:
             agents.find((a) => a.agent_id === recipient)?.name || shortId(recipient),
           message,
-          amountUsdc: parseFloat(amountUsdc),
+          amountUsdc: parsedAmount,
           sentAt: Date.now(),
           sentFrom: node.label,
           status: "proposed",
@@ -107,7 +122,7 @@ export function BountyTab({
     } finally {
       setSending(false);
     }
-  }, [selectedNode, recipient, message, amountUsdc, deadlineStr, secrets, broadcastMode, broadcastCount, onlineAgents, agents, addBounty]);
+  }, [selectedNode, recipient, message, amountUsdc, deadlineStr, secrets, broadcastMode, agents, addBounty]);
 
   const filteredHistory =
     historyFilter === "all" ? history : history.filter((h) => h.status === historyFilter);
@@ -120,6 +135,9 @@ export function BountyTab({
           conversationId={selectedConv}
           history={history}
           envelopes={envelopes}
+          agents={agents}
+          secrets={secrets}
+          onFeedbackSent={(convId, agentId) => updateSubmissionStatus(convId, agentId, "feedback_sent")}
           onClose={() => setSelectedConv(null)}
         />
       )}
@@ -171,20 +189,9 @@ export function BountyTab({
             BROADCAST
           </button>
           {broadcastMode && (
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] text-[var(--sub)]">to</span>
-              <input
-                type="number"
-                min="1"
-                max={onlineAgents.length}
-                className="w-16 bg-[var(--bg)] border border-[var(--border)] rounded px-2 py-1 text-[12px] text-[var(--text)] focus:border-[var(--green)] focus:outline-none"
-                value={broadcastCount}
-                onChange={(e) => setBroadcastCount(e.target.value)}
-              />
-              <span className="text-[10px] text-[var(--sub)]">
-                of {onlineAgents.length} online agents
-              </span>
-            </div>
+            <span className="text-[10px] text-[var(--sub)]">
+              gossipsub to all mesh peers ({onlineAgents.length} online)
+            </span>
           )}
         </div>
 
@@ -281,7 +288,7 @@ export function BountyTab({
           {sending
             ? "SENDING..."
             : broadcastMode
-            ? `BROADCAST PROPOSE x${broadcastCount}`
+            ? "BROADCAST DISCOVER"
             : "SEND PROPOSE"}
         </button>
 
@@ -351,6 +358,11 @@ export function BountyTab({
                 <span className="text-[var(--dim)] flex-1 truncate">
                   {h.message.slice(0, 60)}
                 </span>
+                {h.submissions && h.submissions.length > 0 && (
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-400/10 text-blue-400">
+                    {h.submissions.filter(s => s.status === "delivered" || s.status === "feedback_sent").length}/{h.submissions.length}
+                  </span>
+                )}
                 <span className="text-[var(--green)]">${h.amountUsdc.toFixed(2)}</span>
                 <span className="text-[var(--dim)]">{h.sentFrom}</span>
               </div>

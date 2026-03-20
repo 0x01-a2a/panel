@@ -14,7 +14,7 @@ export function useInbox(secrets: Record<string, string>) {
   }, []);
 
   useEffect(() => {
-    const node = NODES.find((n) => n.nodeUrl && secrets[n.id]);
+    const node = NODES.find((n) => n.nodeUrl && !n.nodeUrl.startsWith("proxy:") && secrets[n.id]);
     if (!node?.nodeUrl || !secrets[node.id]) return;
 
     const ws = connectInboxWs(node.nodeUrl, secrets[node.id], addEnvelope);

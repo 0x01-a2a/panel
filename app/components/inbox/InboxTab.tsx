@@ -1,6 +1,6 @@
 "use client";
 import { useState, useCallback } from "react";
-import type { InboxEnvelope, BountyHistoryEntry } from "@/app/lib/types";
+import type { Agent, BountySubmission, InboxEnvelope, BountyHistoryEntry } from "@/app/lib/types";
 import { NODES, shortId, timeAgo, decodePayload, MSG_COLORS } from "@/app/lib/types";
 import { sendEnvelopeViaNode } from "@/app/lib/api";
 import { DeliverViewer } from "./DeliverViewer";
@@ -9,13 +9,17 @@ export function InboxTab({
   envelopes,
   secrets,
   history,
+  agents,
   updateBountyStatus,
+  updateSubmissionStatus,
   clear,
 }: {
   envelopes: InboxEnvelope[];
   secrets: Record<string, string>;
   history: BountyHistoryEntry[];
+  agents: Agent[];
   updateBountyStatus: (convId: string, status: BountyHistoryEntry["status"]) => void;
+  updateSubmissionStatus: (convId: string, agentId: string, status: BountySubmission["status"]) => void;
   clear: () => void;
 }) {
   const [filter, setFilter] = useState<"all" | string>("all");
@@ -35,6 +39,7 @@ export function InboxTab({
       );
       if (ok) {
         updateBountyStatus(env.conversation_id, "feedback_sent");
+        updateSubmissionStatus(env.conversation_id, env.sender, "feedback_sent");
       }
     },
     [secrets, updateBountyStatus]
@@ -114,7 +119,7 @@ export function InboxTab({
                   {env.msg_type}
                 </span>
                 <span className="text-[10px] text-[var(--sub)]">
-                  from {shortId(env.sender)}
+                  {agents.find(a => a.agent_id === env.sender)?.name ?? shortId(env.sender)}
                 </span>
                 <span className="text-[10px] text-[var(--dim)]">
                   conv:{shortId(env.conversation_id)}
