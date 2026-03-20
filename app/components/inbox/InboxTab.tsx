@@ -42,7 +42,7 @@ export function InboxTab({
         updateSubmissionStatus(env.conversation_id, env.sender, "feedback_sent");
       }
     },
-    [secrets, updateBountyStatus]
+    [secrets, updateBountyStatus, updateSubmissionStatus]
   );
 
   const msgTypes = Array.from(new Set(envelopes.map((e) => e.msg_type)));
@@ -166,7 +166,7 @@ export function InboxTab({
                     APPROVE (+100)
                   </button>
                   <button
-                    onClick={() => handleFeedback(env, 50, "partial")}
+                    onClick={() => handleFeedback(env, 50, "neutral")}
                     className="text-[9px] tracking-[2px] px-3 py-1 border border-[var(--amber)] text-[var(--amber)] rounded hover:bg-[var(--amber)]/10 transition-colors"
                   >
                     PARTIAL (+50)

@@ -5,7 +5,7 @@ import type { BillingAccount, SettlementEntry, RevenueStats } from "@/app/lib/ty
 import { CHAIN_NAMES, timeAgo, shortId } from "@/app/lib/types";
 import { setSkipSettlement } from "@/app/lib/api";
 import { NODES } from "@/app/lib/types";
-import { useState } from "react";
+import React, { useState } from "react";
 
 const AGGREGATOR_URL = NODES[0].aggregatorUrl;
 
@@ -117,9 +117,8 @@ function AccountsTable({
         </thead>
         <tbody>
           {accounts.map((a) => (
-            <>
+            <React.Fragment key={a.account_id}>
               <tr
-                key={a.account_id}
                 className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--bg)] cursor-pointer"
                 onClick={() => setExpanded(expanded === a.account_id ? null : a.account_id)}
               >
@@ -136,7 +135,7 @@ function AccountsTable({
                 <td className="px-3 py-2 text-right text-[var(--dim)]">{timeAgo(a.updated_at)}</td>
               </tr>
               {expanded === a.account_id && (
-                <tr key={`${a.account_id}-detail`} className="bg-[var(--bg)]">
+                <tr className="bg-[var(--bg)]">
                   <td colSpan={5} className="px-4 py-3">
                     <div className="grid grid-cols-2 gap-3 text-[10px]">
                       <div>
@@ -187,7 +186,7 @@ function AccountsTable({
                   </td>
                 </tr>
               )}
-            </>
+            </React.Fragment>
           ))}
         </tbody>
       </table>
