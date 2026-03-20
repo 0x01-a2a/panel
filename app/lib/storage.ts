@@ -1,10 +1,13 @@
-import type { BountyHistoryEntry, PanelConfig, DEFAULT_CONFIG } from "./types";
+import type { BountyHistoryEntry, PanelConfig, ActivityEvent, BountyTemplate } from "./types";
 
 const KEYS = {
   SECRETS: "0x01_panel_secrets",
   HISTORY: "0x01_bounty_history",
   CONFIG: "0x01_panel_config",
   NOTIFICATIONS_DISMISSED: "0x01_dismissed_notifications",
+  ACTIVITY: "0x01_activity",
+  BLOCKLIST: "0x01_blocklist",
+  TEMPLATES: "0x01_templates",
 };
 
 // ── Generic helpers ─────────────────────────────────────────────────────────
@@ -71,6 +74,36 @@ export function loadDismissed(): string[] {
 
 export function saveDismissed(ids: string[]) {
   save(KEYS.NOTIFICATIONS_DISMISSED, ids.slice(-200));
+}
+
+// ── Activity persistence ─────────────────────────────────────────────────────
+
+export function loadActivity(): ActivityEvent[] {
+  return load(KEYS.ACTIVITY, []);
+}
+
+export function saveActivity(events: ActivityEvent[]) {
+  save(KEYS.ACTIVITY, events.slice(0, 1000));
+}
+
+// ── Blocklist ────────────────────────────────────────────────────────────────
+
+export function loadBlocklist(): string[] {
+  return load(KEYS.BLOCKLIST, []);
+}
+
+export function saveBlocklist(ids: string[]) {
+  save(KEYS.BLOCKLIST, ids.slice(0, 1000));
+}
+
+// ── Templates ────────────────────────────────────────────────────────────────
+
+export function loadTemplates(): BountyTemplate[] {
+  return load(KEYS.TEMPLATES, []);
+}
+
+export function saveTemplates(templates: BountyTemplate[]) {
+  save(KEYS.TEMPLATES, templates.slice(0, 50));
 }
 
 // ── Export utilities ────────────────────────────────────────────────────────

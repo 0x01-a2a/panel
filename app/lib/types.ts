@@ -239,6 +239,16 @@ export const CHAIN_NAMES: Record<number, string> = {
   65536: "Ink",
 };
 
+// ── Bounty templates ────────────────────────────────────────────────────────
+
+export interface BountyTemplate {
+  id: string;
+  name: string;
+  message: string;
+  amountUsdc: number;
+  broadcast: boolean;
+}
+
 // ── Config ──────────────────────────────────────────────────────────────────
 
 export interface PanelConfig {

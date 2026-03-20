@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { NODES } from "./lib/types";
-import { loadSecrets, saveSecrets } from "./lib/storage";
+import { loadSecrets, saveSecrets, loadBlocklist, saveBlocklist } from "./lib/storage";
 import { useAgents } from "./lib/hooks/useAgents";
 import { useActivity } from "./lib/hooks/useActivity";
 import { useInbox } from "./lib/hooks/useInbox";
@@ -16,6 +16,7 @@ import { ActivityTab } from "./components/feed/ActivityTab";
 import { AnalyticsTab } from "./components/analytics/AnalyticsTab";
 import { NodeHealthTab } from "./components/nodes/NodeHealthTab";
 import { ExemptListPanel } from "./components/admin/ExemptListPanel";
+import { BlockListPanel } from "./components/admin/BlockListPanel";
 import { ExportPanel } from "./components/admin/ExportPanel";
 import { TreasuryTab } from "./components/treasury/TreasuryTab";
 
@@ -157,16 +158,48 @@ export default function Home() {
   const [showSettings, setShowSettings] = useState(false);
   const [secrets, setSecrets] = useState<Record<string, string>>({});
   const [pendingReviewConv, setPendingReviewConv] = useState<string | null>(null);
+  const [blocklist, setBlocklistState] = useState<string[]>([]);
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
 
-  // Load secrets from localStorage on mount
+  // Load secrets + blocklist + theme from localStorage on mount
   useEffect(() => {
     setSecrets(loadSecrets());
+    setBlocklistState(loadBlocklist());
+    const saved = localStorage.getItem("0x01_theme") as "dark" | "light" | null;
+    if (saved === "light") {
+      setTheme("light");
+      document.documentElement.dataset.theme = "light";
+    }
+  }, []);
+
+  // Apply theme to <html> and persist
+  const toggleTheme = useCallback(() => {
+    setTheme((prev) => {
+      const next = prev === "dark" ? "light" : "dark";
+      document.documentElement.dataset.theme = next === "light" ? "light" : "";
+      localStorage.setItem("0x01_theme", next);
+      return next;
+    });
   }, []);
 
   // Persist secrets
   const handleSetSecrets = useCallback((s: Record<string, string>) => {
     setSecrets(s);
     saveSecrets(s);
+  }, []);
+
+  const handleSetBlocklist = useCallback((ids: string[]) => {
+    setBlocklistState(ids);
+    saveBlocklist(ids);
+  }, []);
+
+  const handleBlockAgent = useCallback((id: string) => {
+    setBlocklistState((prev) => {
+      if (prev.includes(id)) return prev;
+      const updated = [...prev, id];
+      saveBlocklist(updated);
+      return updated;
+    });
   }, []);
 
   // Hooks
@@ -205,9 +238,12 @@ export default function Home() {
   useEffect(() => {
     if (envelopes.length === 0) return;
     for (const env of envelopes) {
-      // Deduplicate by conversation_id + msg_type (same pair won't push twice).
-      const key = `${env.conversation_id}:${env.msg_type}`;
+      // Deduplicate by sender + conversation_id + msg_type so each agent's
+      // response fires its own notification (important for broadcast bounties).
+      const key = `${env.sender}:${env.conversation_id}:${env.msg_type}`;
       if (processedEnvsRef.current.has(key)) continue;
+      // Evict old entries to prevent unbounded Set growth over long sessions.
+      if (processedEnvsRef.current.size >= 1000) processedEnvsRef.current.clear();
       processedEnvsRef.current.add(key);
 
       handleEnvelope(env);
@@ -268,6 +304,13 @@ export default function Home() {
               }}
             />
             <button
+              onClick={toggleTheme}
+              className="text-[10px] tracking-[2px] px-3 py-1.5 border border-[var(--border)] rounded text-[var(--sub)] hover:border-[var(--dim)] transition-colors"
+              title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            >
+              {theme === "dark" ? "LIGHT" : "DARK"}
+            </button>
+            <button
               onClick={() => setShowSettings(!showSettings)}
               className={`text-[10px] tracking-[2px] px-3 py-1.5 border rounded transition-colors ${
                 showSettings
@@ -323,6 +366,8 @@ export default function Home() {
             totalCount={totalCount}
             activity={activity}
             bountyHistory={bountyHistory}
+            blocklist={blocklist}
+            onBlock={handleBlockAgent}
           />
         )}
         {tab === "bounty" && (
@@ -335,6 +380,7 @@ export default function Home() {
             updateSubmissionStatus={updateSubmissionStatus}
             openConversationId={pendingReviewConv}
             onConversationOpened={() => setPendingReviewConv(null)}
+            blocklist={blocklist}
           />
         )}
         {tab === "inbox" && (
@@ -370,6 +416,7 @@ export default function Home() {
         {tab === "admin" && (
           <div className="space-y-4">
             <ExemptListPanel secrets={secrets} />
+            <BlockListPanel blocklist={blocklist} setBlocklist={handleSetBlocklist} />
             <ExportPanel
               agents={agents}
               history={bountyHistory}

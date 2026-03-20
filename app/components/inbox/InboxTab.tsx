@@ -1,5 +1,5 @@
 "use client";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import type { Agent, BountySubmission, InboxEnvelope, BountyHistoryEntry } from "@/app/lib/types";
 import { NODES, shortId, timeAgo, decodePayload, MSG_COLORS } from "@/app/lib/types";
 import { sendEnvelopeViaNode } from "@/app/lib/api";
@@ -45,8 +45,14 @@ export function InboxTab({
     [secrets, updateBountyStatus, updateSubmissionStatus]
   );
 
-  const msgTypes = Array.from(new Set(envelopes.map((e) => e.msg_type)));
-  const filtered = filter === "all" ? envelopes : envelopes.filter((e) => e.msg_type === filter);
+  const msgTypes = useMemo(
+    () => Array.from(new Set(envelopes.map((e) => e.msg_type))),
+    [envelopes]
+  );
+  const filtered = useMemo(
+    () => filter === "all" ? envelopes : envelopes.filter((e) => e.msg_type === filter),
+    [envelopes, filter]
+  );
 
   return (
     <div>
@@ -108,7 +114,7 @@ export function InboxTab({
 
           return (
             <div
-              key={`${env.conversation_id}-${i}`}
+              key={`${env.conversation_id}:${env.msg_type}:${env.sender}:${env.slot ?? i}`}
               className="border border-[var(--border)] rounded p-3 hover:border-[var(--dim)] transition-colors"
             >
               <div

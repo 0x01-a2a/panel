@@ -3,8 +3,6 @@ import { useState, useCallback, useEffect } from "react";
 import type { Notification } from "../types";
 import { loadDismissed, saveDismissed } from "../storage";
 
-let _notifCounter = 0;
-
 export function useNotifications() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [dismissed, setDismissed] = useState<string[]>([]);
@@ -20,7 +18,7 @@ export function useNotifications() {
       message: string,
       conversationId?: string
     ) => {
-      const id = `n_${Date.now()}_${++_notifCounter}`;
+      const id = crypto.randomUUID();
       setNotifications((prev) =>
         [
           { id, type, title, message, timestamp: Date.now(), dismissed: false, conversationId },

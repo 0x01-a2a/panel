@@ -1,8 +1,9 @@
 "use client";
-import { useState, useCallback, useEffect } from "react";
-import type { Agent, BountyHistoryEntry, BountySubmission } from "@/app/lib/types";
+import { useState, useCallback, useEffect, useMemo } from "react";
+import type { Agent, BountyHistoryEntry, BountySubmission, BountyTemplate } from "@/app/lib/types";
 import { NODES, shortId } from "@/app/lib/types";
 import { sendPropose, sendDiscover } from "@/app/lib/api";
+import { loadTemplates, saveTemplates } from "@/app/lib/storage";
 import { ConversationThread } from "./ConversationThread";
 
 export function BountyTab({
@@ -14,6 +15,7 @@ export function BountyTab({
   updateSubmissionStatus,
   openConversationId,
   onConversationOpened,
+  blocklist,
 }: {
   secrets: Record<string, string>;
   agents: Agent[];
@@ -23,9 +25,21 @@ export function BountyTab({
   updateSubmissionStatus: (conversationId: string, agentId: string, status: BountySubmission["status"]) => void;
   openConversationId?: string | null;
   onConversationOpened?: () => void;
+  blocklist?: string[];
 }) {
-  const sendNodes = NODES.filter((n) => n.nodeUrl && secrets[n.id]);
+  const blocklistSet = useMemo(() => new Set(blocklist ?? []), [blocklist]);
+  const sendNodes = useMemo(
+    () => NODES.filter((n) => n.nodeUrl && secrets[n.id]),
+    [secrets]
+  );
   const [selectedNode, setSelectedNode] = useState(sendNodes[0]?.id || "");
+
+  // Keep selectedNode valid when secrets change (e.g. user adds first secret)
+  useEffect(() => {
+    if (!selectedNode || !sendNodes.find((n) => n.id === selectedNode)) {
+      setSelectedNode(sendNodes[0]?.id || "");
+    }
+  }, [sendNodes, selectedNode]);
   const [recipient, setRecipient] = useState("");
   const [message, setMessage] = useState("");
   const [amountUsdc, setAmountUsdc] = useState("0.01");
@@ -37,6 +51,39 @@ export function BountyTab({
   const [result, setResult] = useState<string | null>(null);
   const [broadcastMode, setBroadcastMode] = useState(false);
   const [selectedConv, setSelectedConv] = useState<string | null>(null);
+  const [templates, setTemplates] = useState<BountyTemplate[]>(() => loadTemplates());
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [templateName, setTemplateName] = useState("");
+  const [showSaveTemplate, setShowSaveTemplate] = useState(false);
+
+  const handleSaveTemplate = useCallback(() => {
+    if (!templateName.trim() || !message.trim()) return;
+    const t: BountyTemplate = {
+      id: Date.now().toString(36),
+      name: templateName.trim(),
+      message,
+      amountUsdc: parseFloat(amountUsdc) || 0.01,
+      broadcast: broadcastMode,
+    };
+    const updated = [t, ...templates].slice(0, 50);
+    setTemplates(updated);
+    saveTemplates(updated);
+    setTemplateName("");
+    setShowSaveTemplate(false);
+  }, [templateName, message, amountUsdc, broadcastMode, templates]);
+
+  const handleLoadTemplate = useCallback((t: BountyTemplate) => {
+    setMessage(t.message);
+    setAmountUsdc(String(t.amountUsdc));
+    setBroadcastMode(t.broadcast);
+    setShowTemplates(false);
+  }, []);
+
+  const handleDeleteTemplate = useCallback((id: string) => {
+    const updated = templates.filter((t) => t.id !== id);
+    setTemplates(updated);
+    saveTemplates(updated);
+  }, [templates]);
 
   // Auto-open conversation when navigated from notification
   useEffect(() => {
@@ -48,7 +95,11 @@ export function BountyTab({
   const [historyFilter, setHistoryFilter] = useState<"all" | BountyHistoryEntry["status"]>("all");
 
   const now = Date.now() / 1000;
-  const onlineAgents = agents.filter((a) => now - a.last_seen < 300);
+  const onlineAgents = useMemo(
+    () => agents.filter((a) => now - a.last_seen < 300 && !blocklistSet.has(a.agent_id)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [agents, blocklistSet]
+  );
 
   const handleSend = useCallback(async () => {
     const node = NODES.find((n) => n.id === selectedNode);
@@ -176,7 +227,7 @@ export function BountyTab({
           </div>
         </div>
 
-        {/* Broadcast toggle */}
+        {/* Broadcast toggle + templates */}
         <div className="flex items-center gap-3">
           <button
             onClick={() => setBroadcastMode(!broadcastMode)}
@@ -193,7 +244,53 @@ export function BountyTab({
               gossipsub to all mesh peers ({onlineAgents.length} online)
             </span>
           )}
+          <button
+            onClick={() => setShowTemplates(!showTemplates)}
+            className={`ml-auto text-[9px] tracking-[2px] px-3 py-1.5 border rounded transition-colors ${
+              showTemplates
+                ? "border-[var(--green)] text-[var(--green)]"
+                : "border-[var(--border)] text-[var(--sub)] hover:border-[var(--dim)]"
+            }`}
+          >
+            TEMPLATES {templates.length > 0 ? `(${templates.length})` : ""}
+          </button>
         </div>
+
+        {/* Templates panel */}
+        {showTemplates && (
+          <div className="border border-[var(--border)] rounded p-3 space-y-2">
+            {templates.length === 0 ? (
+              <p className="text-[10px] text-[var(--dim)] text-center py-2">
+                No templates yet. Fill the form and click SAVE AS TEMPLATE.
+              </p>
+            ) : (
+              templates.map((t) => (
+                <div key={t.id} className="flex items-center gap-2 border border-[var(--border)] rounded px-2 py-1.5">
+                  <div className="flex-1 min-w-0">
+                    <span className="text-[10px] text-[var(--text)] font-bold">{t.name}</span>
+                    <span className="text-[9px] text-[var(--dim)] ml-2 truncate">{t.message.slice(0, 50)}</span>
+                  </div>
+                  <span className="text-[9px] text-[var(--sub)]">${t.amountUsdc.toFixed(2)}</span>
+                  {t.broadcast && (
+                    <span className="text-[8px] px-1 rounded bg-[var(--amber)]/10 text-[var(--amber)]">BC</span>
+                  )}
+                  <button
+                    onClick={() => handleLoadTemplate(t)}
+                    className="text-[9px] px-2 py-0.5 border border-[var(--green)]/40 rounded text-[var(--green)] hover:bg-[var(--green)]/10 transition-colors"
+                  >
+                    LOAD
+                  </button>
+                  <button
+                    onClick={() => handleDeleteTemplate(t.id)}
+                    className="text-[9px] px-2 py-0.5 border border-[var(--red)]/30 rounded text-[var(--red)] hover:bg-[var(--red)]/10 transition-colors"
+                  >
+                    DEL
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        )}
 
         {/* Recipient */}
         {!broadcastMode && (
@@ -303,6 +400,43 @@ export function BountyTab({
             {result}
           </pre>
         )}
+
+        {/* Save as template */}
+        <div className="pt-1">
+          {showSaveTemplate ? (
+            <div className="flex gap-2">
+              <input
+                placeholder="Template name..."
+                className="flex-1 bg-[var(--bg)] border border-[var(--border)] rounded px-3 py-1.5 text-[11px] text-[var(--text)] placeholder:text-[var(--dim)] focus:border-[var(--green)] focus:outline-none"
+                value={templateName}
+                onChange={(e) => setTemplateName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSaveTemplate()}
+                autoFocus
+              />
+              <button
+                onClick={handleSaveTemplate}
+                disabled={!templateName.trim() || !message.trim()}
+                className="text-[9px] tracking-[2px] px-3 py-1.5 border border-[var(--green)] text-[var(--green)] rounded hover:bg-[var(--green)]/10 disabled:opacity-30 transition-colors"
+              >
+                SAVE
+              </button>
+              <button
+                onClick={() => { setShowSaveTemplate(false); setTemplateName(""); }}
+                className="text-[9px] px-2 py-1.5 border border-[var(--border)] rounded text-[var(--dim)] hover:text-[var(--sub)] transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowSaveTemplate(true)}
+              disabled={!message.trim()}
+              className="text-[9px] tracking-[2px] text-[var(--dim)] hover:text-[var(--sub)] disabled:opacity-30 transition-colors"
+            >
+              + SAVE AS TEMPLATE
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Bounty history */}

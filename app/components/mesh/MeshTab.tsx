@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import type { Agent, ActivityEvent, BountyHistoryEntry } from "@/app/lib/types";
 import { shortId, timeAgo } from "@/app/lib/types";
 import type { AgentSort } from "@/app/lib/hooks/useAgents";
@@ -16,6 +16,8 @@ export function MeshTab({
   totalCount,
   activity,
   bountyHistory,
+  blocklist,
+  onBlock,
 }: {
   agents: Agent[];
   sorted: Agent[];
@@ -27,9 +29,16 @@ export function MeshTab({
   totalCount: number;
   activity: ActivityEvent[];
   bountyHistory: BountyHistoryEntry[];
+  blocklist: string[];
+  onBlock: (id: string) => void;
 }) {
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const now = Date.now() / 1000;
+  const blocklistSet = useMemo(() => new Set(blocklist), [blocklist]);
+  const visibleAgents = useMemo(
+    () => sorted.filter((a) => !blocklistSet.has(a.agent_id)),
+    [sorted, blocklistSet]
+  );
 
   return (
     <div>
@@ -85,12 +94,16 @@ export function MeshTab({
 
       {/* Agent list */}
       <div className="max-h-[calc(100vh-320px)] overflow-y-auto space-y-1">
-        {sorted.map((a) => {
+        {blocklist.length > 0 && (
+          <p className="text-[9px] text-[var(--dim)] mb-1">
+            {blocklist.length} agent{blocklist.length !== 1 ? "s" : ""} hidden (blocked) · manage in ADMIN
+          </p>
+        )}
+        {visibleAgents.map((a) => {
           const online = now - a.last_seen < 120;
           return (
             <div
               key={a.agent_id}
-              onClick={() => setSelectedAgent(a)}
               className="flex items-center gap-3 px-3 py-2 border border-[var(--border)] rounded hover:border-[var(--dim)] transition-colors group cursor-pointer"
             >
               <div
@@ -98,7 +111,7 @@ export function MeshTab({
                   online ? "bg-[var(--green)]" : "bg-[var(--dim)]"
                 }`}
               />
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-0" onClick={() => setSelectedAgent(a)}>
                 <div className="flex items-center gap-2">
                   <span className="text-[12px] text-[var(--text)] truncate">
                     {a.name}
@@ -160,6 +173,12 @@ export function MeshTab({
                   ))}
                 </div>
               )}
+              <button
+                onClick={(e) => { e.stopPropagation(); onBlock(a.agent_id); }}
+                className="hidden group-hover:block text-[9px] px-2 py-0.5 border border-[var(--red)]/30 rounded text-[var(--red)] hover:bg-[var(--red)]/10 transition-colors ml-1"
+              >
+                BLOCK
+              </button>
             </div>
           );
         })}

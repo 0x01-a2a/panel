@@ -16,6 +16,18 @@
   --dim: #333;
 }
 
+[data-theme="light"] {
+  --bg: #f4f4f4;
+  --card: #ffffff;
+  --border: #d4d4d4;
+  --green: #007a5e;
+  --red: #c62828;
+  --amber: #c17d00;
+  --text: #111111;
+  --sub: #666666;
+  --dim: #aaaaaa;
+}
+
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--dim) var(--bg);

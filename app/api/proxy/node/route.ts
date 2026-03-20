@@ -18,10 +18,10 @@ const ALLOWED_PATHS = new Set([
   "/hosted/register",
 ]);
 
-/** Returns true for /admin/exempt/<hex-agent-id> (DELETE) */
+/** Returns true for /admin/exempt/<64-char-hex-agent-id> (DELETE) */
 function isAllowedPath(p: string): boolean {
   if (ALLOWED_PATHS.has(p)) return true;
-  if (/^\/admin\/exempt\/[0-9a-f]{1,64}$/.test(p)) return true;
+  if (/^\/admin\/exempt\/[0-9a-f]{64}$/.test(p)) return true;
   return false;
 }
 
@@ -30,8 +30,13 @@ function isAllowedPath(p: string): boolean {
  * Returns false when SESSION_SECRET is not configured (open-access dev mode).
  */
 async function hasSession(): Promise<boolean> {
-  // If SESSION_SECRET is not set we're in dev-open mode — skip gate.
-  if (!process.env.SESSION_SECRET) return true;
+  if (!process.env.SESSION_SECRET) {
+    if (process.env.NODE_ENV === "production") {
+      console.error("[proxy] SESSION_SECRET is not set in production — denying all proxy requests");
+      return false;
+    }
+    return true; // dev-open mode
+  }
   const cookieStore = await cookies();
   const token = cookieStore.get("0x01_session")?.value;
   return !!token && verifySession(token);
