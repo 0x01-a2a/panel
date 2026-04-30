@@ -1,9 +1,9 @@
 "use client";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import type { Agent, BountyHistoryEntry, BountySubmission } from "@/app/lib/types";
 import { shortId, timeAgo, decodePayload } from "@/app/lib/types";
 import { NODES } from "@/app/lib/types";
-import { sendEnvelopeViaNode } from "@/app/lib/api";
+import { sendEnvelopeViaNode, sendDeliver, sendCounter, sendAccept, sendReject } from "@/app/lib/api";
 import { Modal } from "../shared/Modal";
 import { CopyButton } from "../shared/CopyButton";
 import { DeliverViewer } from "../inbox/DeliverViewer";
@@ -130,6 +130,15 @@ export function ConversationThread({
   onFeedbackSent: (conversationId: string, agentId: string) => void;
   onClose: () => void;
 }) {
+  const [deliverText, setDeliverText] = useState("");
+  const [counterAmount, setCounterAmount] = useState("");
+  const [showDeliver, setShowDeliver] = useState(false);
+  const [showCounter, setShowCounter] = useState(false);
+  const [threadBusy, setThreadBusy] = useState(false);
+  const [threadResult, setThreadResult] = useState<string | null>(null);
+
+  const firstNode = NODES.find(n => n.nodeUrl && secrets[n.id]);
+
   const bounty = history.find(h => h.conversationId === conversationId);
   const isBroadcast = bounty?.recipient === "broadcast";
   const submissions = bounty?.submissions ?? [];
@@ -294,6 +303,152 @@ export function ConversationThread({
         {/* Rejected count for broadcast */}
         {isBroadcast && rejectedCount > 0 && (
           <p className="text-[9px] text-[var(--dim)] text-right">{rejectedCount} agent{rejectedCount !== 1 ? "s" : ""} rejected</p>
+        )}
+
+        {/* Direct thread action bar */}
+        {!isBroadcast && firstNode && bounty && (
+          <div className="border-t border-[var(--border)] pt-3 space-y-2">
+            {threadResult && (
+              <p className={`text-[9px] ${threadResult.startsWith("ERR") ? "text-[var(--red)]" : "text-[var(--green)]"}`}>
+                {threadResult}
+              </p>
+            )}
+            {/* DELIVER — shown when recipient has accepted */}
+            {bounty.status === "accepted" && (
+              <div className="space-y-2">
+                <button
+                  onClick={() => setShowDeliver(v => !v)}
+                  className={`text-[9px] tracking-[2px] px-3 py-1.5 border rounded transition-colors ${
+                    showDeliver ? "border-blue-400 text-blue-400 bg-blue-400/5" : "border-[var(--border)] text-[var(--sub)]"
+                  }`}
+                >
+                  DELIVER WORK
+                </button>
+                {showDeliver && (
+                  <div className="space-y-1">
+                    <textarea
+                      rows={4}
+                      placeholder="Paste delivery content..."
+                      value={deliverText}
+                      onChange={e => setDeliverText(e.target.value)}
+                      className="w-full bg-[var(--bg)] border border-[var(--border)] rounded px-2 py-1.5 text-[11px] text-[var(--text)] focus:border-blue-400 focus:outline-none resize-none"
+                    />
+                    <button
+                      onClick={async () => {
+                        if (!deliverText.trim() || !firstNode?.nodeUrl) return;
+                        setThreadBusy(true);
+                        try {
+                          await sendDeliver(firstNode.nodeUrl, secrets[firstNode.id], {
+                            recipient: bounty.recipient,
+                            conversation_id: conversationId,
+                            text: deliverText,
+                          });
+                          setThreadResult("DELIVERED");
+                          setShowDeliver(false);
+                          setDeliverText("");
+                        } catch (e) { setThreadResult(`ERR: ${e}`); }
+                        finally { setThreadBusy(false); }
+                      }}
+                      disabled={threadBusy || !deliverText.trim()}
+                      className="text-[9px] px-3 py-1 border border-blue-400 text-blue-400 rounded hover:bg-blue-400/10 disabled:opacity-30 transition-colors"
+                    >
+                      SEND DELIVER
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+            {/* COUNTER actions — shown when last received envelope is COUNTER */}
+            {(() => {
+              const last = convEnvelopes[convEnvelopes.length - 1];
+              if (!last || last.msg_type !== "COUNTER") return null;
+              const p = decodePayload(last.payload_b64);
+              const round = typeof p === "object" && p !== null && "round" in p ? Number((p as Record<string, unknown>).round) + 1 : 1;
+              return (
+                <div className="space-y-2">
+                  <div className="flex gap-2 flex-wrap">
+                    <button
+                      onClick={async () => {
+                        if (!firstNode?.nodeUrl) return;
+                        setThreadBusy(true);
+                        try {
+                          const micro = typeof p === "object" && p !== null && "amount_usdc_micro" in p
+                            ? Number((p as Record<string, unknown>).amount_usdc_micro) : 0;
+                          await sendAccept(firstNode.nodeUrl, secrets[firstNode.id], {
+                            recipient: last.sender, conversation_id: conversationId, amount_usdc_micro: micro,
+                          });
+                          setThreadResult("ACCEPTED counter");
+                        } catch (e) { setThreadResult(`ERR: ${e}`); }
+                        finally { setThreadBusy(false); }
+                      }}
+                      disabled={threadBusy}
+                      className="text-[9px] tracking-[2px] px-3 py-1 border border-[var(--green)] text-[var(--green)] rounded hover:bg-[var(--green)]/10 disabled:opacity-30 transition-colors"
+                    >
+                      ACCEPT COUNTER
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (!firstNode?.nodeUrl) return;
+                        setThreadBusy(true);
+                        try {
+                          await sendReject(firstNode.nodeUrl, secrets[firstNode.id], { recipient: last.sender, conversation_id: conversationId });
+                          setThreadResult("REJECTED");
+                        } catch (e) { setThreadResult(`ERR: ${e}`); }
+                        finally { setThreadBusy(false); }
+                      }}
+                      disabled={threadBusy}
+                      className="text-[9px] tracking-[2px] px-3 py-1 border border-[var(--red)] text-[var(--red)] rounded hover:bg-[var(--red)]/10 disabled:opacity-30 transition-colors"
+                    >
+                      REJECT
+                    </button>
+                    <button
+                      onClick={() => setShowCounter(v => !v)}
+                      disabled={threadBusy}
+                      className={`text-[9px] tracking-[2px] px-3 py-1 border rounded disabled:opacity-30 transition-colors ${
+                        showCounter ? "border-[var(--amber)] text-[var(--amber)] bg-[var(--amber)]/5" : "border-[var(--border)] text-[var(--sub)]"
+                      }`}
+                    >
+                      COUNTER BACK
+                    </button>
+                  </div>
+                  {showCounter && (
+                    <div className="flex gap-2 items-center">
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="Your counter (USDC)"
+                        value={counterAmount}
+                        onChange={e => setCounterAmount(e.target.value)}
+                        className="flex-1 bg-[var(--bg)] border border-[var(--border)] rounded px-2 py-1 text-[11px] text-[var(--text)] focus:border-[var(--amber)] focus:outline-none"
+                      />
+                      <button
+                        onClick={async () => {
+                          const micro = Math.round(parseFloat(counterAmount) * 1_000_000);
+                          if (isNaN(micro) || micro <= 0 || !firstNode?.nodeUrl) return;
+                          setThreadBusy(true);
+                          try {
+                            await sendCounter(firstNode.nodeUrl, secrets[firstNode.id], {
+                              recipient: last.sender, conversation_id: conversationId,
+                              amount_usdc_micro: micro, round,
+                            });
+                            setThreadResult(`COUNTER sent @ $${counterAmount}`);
+                            setShowCounter(false);
+                            setCounterAmount("");
+                          } catch (e) { setThreadResult(`ERR: ${e}`); }
+                          finally { setThreadBusy(false); }
+                        }}
+                        disabled={threadBusy || !counterAmount}
+                        className="text-[9px] px-3 py-1 border border-[var(--amber)] text-[var(--amber)] rounded hover:bg-[var(--amber)]/10 disabled:opacity-30 transition-colors"
+                      >
+                        SEND
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
         )}
       </div>
     </Modal>

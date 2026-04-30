@@ -230,6 +230,8 @@ export const CHAIN_NAMES: Record<number, string> = {
   5: "Solana",
   6: "Base",
   7: "Polygon",
+  8: "Sui",
+  9: "Sui Testnet",
   11: "Linea",
   12: "Sei",
   16: "Unichain",
@@ -239,6 +241,19 @@ export const CHAIN_NAMES: Record<number, string> = {
   65536: "Ink",
 };
 
+// ── Aggregator bounty entry ──────────────────────────────────────────────────
+
+export interface AggregatorBounty {
+  id: number;
+  sender: string;
+  required_capability: string;
+  max_budget_usd: number;
+  deadline_at: number;
+  task_summary: string;
+  conversation_id: string;
+  ts: number;
+}
+
 // ── Bounty templates ────────────────────────────────────────────────────────
 
 export interface BountyTemplate {
@@ -247,6 +262,7 @@ export interface BountyTemplate {
   message: string;
   amountUsdc: number;
   broadcast: boolean;
+  capability?: string;
 }
 
 // ── Config ──────────────────────────────────────────────────────────────────
@@ -278,6 +294,7 @@ export const MSG_COLORS: Record<string, string> = {
   VERDICT: "text-cyan-400",
   JOIN: "text-[var(--sub)]",
   DISCOVER: "text-teal-400",
+  BOUNTY: "text-yellow-400",
   BROADCAST: "text-orange-400",
 };
 

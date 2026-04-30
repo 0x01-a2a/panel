@@ -11,6 +11,8 @@ const ALLOWED_IPS = new Set(NODES.map((n) => n.ip));
  */
 const ALLOWED_PATHS = new Set([
   "/negotiate/propose",
+  "/negotiate/counter",
+  "/negotiate/accept",
   "/envelopes/send",
   "/admin/exempt",
   "/admin/stats",

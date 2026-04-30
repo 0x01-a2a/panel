@@ -21,6 +21,19 @@ function nodeApiUrl(nodeUrl: string, path: string): string {
 
 // ── Aggregator API ──────────────────────────────────────────────────────────
 
+export async function fetchBounties(
+  aggregatorUrl: string,
+  capability?: string,
+  limit = 50
+): Promise<import("./types").AggregatorBounty[]> {
+  let url = `${aggregatorUrl}/bounties?limit=${limit}`;
+  if (capability) url += `&capability=${encodeURIComponent(capability)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
+}
+
 export async function fetchAgents(aggregatorUrl: string): Promise<Agent[]> {
   const res = await fetch(`${aggregatorUrl}/agents`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -88,12 +101,46 @@ export async function sendEnvelopeViaNode(
   return res.ok;
 }
 
-// ── Discover (broadcast) ────────────────────────────────────────────────────
+// ── Bounty broadcast (0x0F) ─────────────────────────────────────────────────
+
+export async function sendBounty(
+  nodeUrl: string,
+  apiSecret: string,
+  payload: {
+    required_capability: string;
+    max_budget_usd: number;
+    task_summary: string;
+    deadline_secs?: number;
+  }
+): Promise<{ conversation_id: string }> {
+  const conversationId = crypto.randomUUID().replace(/-/g, "");
+  const payloadB64 = btoa(JSON.stringify({ ...payload, conversation_id: conversationId }));
+  const res = await fetch(nodeApiUrl(nodeUrl, "/envelopes/send"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiSecret}`,
+    },
+    body: JSON.stringify({
+      msg_type: "BOUNTY",
+      recipient: "0".repeat(64), // broadcast — gossipsub, recipient ignored
+      conversation_id: conversationId,
+      payload_b64: payloadB64,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return { conversation_id: conversationId };
+}
+
+// ── Discover (capability query) ──────────────────────────────────────────────
 
 export async function sendDiscover(
   nodeUrl: string,
   apiSecret: string,
-  payload: { message: string; amount_usdc_micro?: number; deadline_secs?: number }
+  payload: { query: string }
 ): Promise<{ conversation_id: string }> {
   const conversationId = crypto.randomUUID().replace(/-/g, "");
   const payloadB64 = btoa(JSON.stringify(payload));
@@ -105,7 +152,7 @@ export async function sendDiscover(
     },
     body: JSON.stringify({
       msg_type: "DISCOVER",
-      recipient: "0".repeat(64), // broadcast — recipient ignored for pubsub
+      recipient: "0".repeat(64),
       conversation_id: conversationId,
       payload_b64: payloadB64,
     }),
@@ -115,6 +162,83 @@ export async function sendDiscover(
     throw new Error(err.error || `HTTP ${res.status}`);
   }
   return { conversation_id: conversationId };
+}
+
+// ── Advertise ────────────────────────────────────────────────────────────────
+
+export async function sendAdvertise(
+  nodeUrl: string,
+  apiSecret: string,
+  payload: { capabilities: string[]; name?: string }
+): Promise<boolean> {
+  const conversationId = crypto.randomUUID().replace(/-/g, "");
+  const payloadB64 = btoa(JSON.stringify(payload));
+  const res = await fetch(nodeApiUrl(nodeUrl, "/envelopes/send"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiSecret}` },
+    body: JSON.stringify({
+      msg_type: "ADVERTISE",
+      recipient: "0".repeat(64),
+      conversation_id: conversationId,
+      payload_b64: payloadB64,
+    }),
+  });
+  return res.ok;
+}
+
+// ── Negotiate: accept / counter / reject / deliver ──────────────────────────
+
+export async function sendAccept(
+  nodeUrl: string,
+  apiSecret: string,
+  req: { recipient: string; conversation_id: string; amount_usdc_micro: number; message?: string }
+): Promise<{ conversation_id: string }> {
+  if (!apiSecret) throw new Error("API secret required");
+  const res = await fetch(nodeApiUrl(nodeUrl, "/negotiate/accept"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiSecret}` },
+    body: JSON.stringify(req),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { error?: string }).error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function sendCounter(
+  nodeUrl: string,
+  apiSecret: string,
+  req: { recipient: string; conversation_id: string; amount_usdc_micro: number; round: number; message?: string }
+): Promise<{ conversation_id: string }> {
+  if (!apiSecret) throw new Error("API secret required");
+  const res = await fetch(nodeApiUrl(nodeUrl, "/negotiate/counter"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiSecret}` },
+    body: JSON.stringify(req),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { error?: string }).error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function sendReject(
+  nodeUrl: string,
+  apiSecret: string,
+  req: { recipient: string; conversation_id: string }
+): Promise<boolean> {
+  return sendEnvelopeViaNode(nodeUrl, apiSecret, "REJECT", req.recipient, req.conversation_id, btoa("{}"));
+}
+
+export async function sendDeliver(
+  nodeUrl: string,
+  apiSecret: string,
+  req: { recipient: string; conversation_id: string; text: string }
+): Promise<boolean> {
+  const payload = btoa(JSON.stringify({ type: "text", content: req.text }));
+  return sendEnvelopeViaNode(nodeUrl, apiSecret, "DELIVER", req.recipient, req.conversation_id, payload);
 }
 
 // ── Exempt list ─────────────────────────────────────────────────────────────

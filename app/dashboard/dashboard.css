@@ -1,0 +1,381 @@
+.d-root {
+  --d-bg: #07090D;
+  --d-surface: #0D1117;
+  --d-surface-2: #131920;
+  --d-border: #1C2433;
+  --d-border-sub: #0F1622;
+  --d-text: #C9D1D9;
+  --d-muted: #4A5568;
+  --d-dim: #1E2A3A;
+  --d-gold: #F0A833;
+  --d-gold-10: rgba(240, 168, 51, 0.10);
+  --d-gold-20: rgba(240, 168, 51, 0.20);
+  --d-green: #2DD968;
+  --d-green-10: rgba(45, 217, 104, 0.10);
+  --d-red: #F85149;
+  --d-red-10: rgba(248, 81, 73, 0.10);
+  --d-blue: #58A6FF;
+  --d-purple: #A855F7;
+  --sidebar-w: 220px;
+
+  background: var(--d-bg);
+  color: var(--d-text);
+  min-height: 100vh;
+}
+
+/* ── Sidebar ─────────────────────────────────────────────────────────────── */
+.d-sidebar {
+  width: var(--sidebar-w);
+  min-height: 100vh;
+  background: var(--d-surface);
+  border-right: 1px solid var(--d-border);
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 40;
+}
+
+.d-sidebar-logo {
+  padding: 22px 20px;
+  border-bottom: 1px solid var(--d-border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.d-logo-mark {
+  width: 32px;
+  height: 32px;
+  background: var(--d-gold);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.d-nav {
+  flex: 1;
+  padding: 10px 0;
+}
+
+.d-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 20px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--d-muted);
+  cursor: pointer;
+  transition: color 0.12s, background 0.12s;
+  text-decoration: none;
+  width: 100%;
+  border: none;
+  background: none;
+  text-align: left;
+  letter-spacing: 0.01em;
+}
+
+.d-nav-item:hover {
+  color: var(--d-text);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.d-nav-item.d-nav-active {
+  color: var(--d-gold);
+  background: var(--d-gold-10);
+}
+
+.d-sidebar-footer {
+  padding: 14px 20px;
+  border-top: 1px solid var(--d-border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── Status dots ─────────────────────────────────────────────────────────── */
+@keyframes d-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(45, 217, 104, 0.5); }
+  60% { box-shadow: 0 0 0 5px rgba(45, 217, 104, 0); }
+}
+
+.d-dot-online {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--d-green);
+  animation: d-pulse 2.4s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+.d-dot-offline {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--d-muted);
+  flex-shrink: 0;
+}
+
+.d-dot-pending {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--d-gold);
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+/* ── Layout ──────────────────────────────────────────────────────────────── */
+.d-main {
+  margin-left: var(--sidebar-w);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.d-topbar {
+  height: 52px;
+  border-bottom: 1px solid var(--d-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 28px;
+  background: var(--d-surface);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  flex-shrink: 0;
+}
+
+.d-content {
+  padding: 28px;
+  flex: 1;
+}
+
+/* ── Cards ───────────────────────────────────────────────────────────────── */
+.d-card {
+  background: var(--d-surface);
+  border: 1px solid var(--d-border);
+  border-radius: 10px;
+  padding: 20px;
+}
+
+.d-card-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--d-text);
+  margin: 0 0 16px;
+  letter-spacing: 0.01em;
+}
+
+/* ── Stat card ───────────────────────────────────────────────────────────── */
+.d-stat {
+  background: var(--d-surface);
+  border: 1px solid var(--d-border);
+  border-radius: 10px;
+  padding: 18px 20px;
+}
+
+.d-stat-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--d-muted);
+  margin-bottom: 8px;
+}
+
+.d-stat-value {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.d-stat-sub {
+  font-size: 11px;
+  color: var(--d-muted);
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
+.d-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 9px 18px;
+  cursor: pointer;
+  transition: opacity 0.12s, transform 0.08s;
+  border: none;
+  outline: none;
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+}
+
+.d-btn:active { transform: scale(0.98); }
+.d-btn:disabled { opacity: 0.35; cursor: not-allowed; pointer-events: none; }
+
+.d-btn-gold { background: var(--d-gold); color: #000; }
+.d-btn-gold:hover { opacity: 0.88; }
+
+.d-btn-outline {
+  background: transparent;
+  border: 1px solid var(--d-border);
+  color: var(--d-text);
+}
+.d-btn-outline:hover { border-color: var(--d-muted); background: rgba(255,255,255,0.025); }
+
+.d-btn-ghost { background: transparent; color: var(--d-muted); }
+.d-btn-ghost:hover { color: var(--d-text); }
+
+.d-btn-danger { background: var(--d-red-10); border: 1px solid var(--d-red); color: var(--d-red); }
+.d-btn-danger:hover { background: rgba(248, 81, 73, 0.18); }
+
+/* ── Input ───────────────────────────────────────────────────────────────── */
+.d-input {
+  background: var(--d-bg);
+  border: 1px solid var(--d-border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: var(--d-text);
+  font-size: 13.5px;
+  outline: none;
+  transition: border-color 0.12s;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.d-input:focus { border-color: var(--d-gold); }
+.d-input::placeholder { color: var(--d-muted); }
+
+.d-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--d-muted);
+  margin-bottom: 7px;
+}
+
+/* ── Activity rows ───────────────────────────────────────────────────────── */
+.d-activity-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--d-border-sub);
+}
+.d-activity-row:last-child { border-bottom: none; }
+
+/* ── Badge ───────────────────────────────────────────────────────────────── */
+.d-badge {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  padding: 3px 7px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── Rep bar ─────────────────────────────────────────────────────────────── */
+.d-rep-track {
+  height: 5px;
+  background: var(--d-dim);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 5px;
+}
+.d-rep-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.7s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* ── Bar chart (SVG-based, no library) ────────────────────────────────────── */
+.d-bar-chart { display: flex; align-items: flex-end; gap: 4px; height: 80px; }
+.d-bar { border-radius: 3px 3px 0 0; transition: height 0.5s ease; min-width: 18px; flex: 1; }
+
+/* ── Step wizard ─────────────────────────────────────────────────────────── */
+.d-step-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-bottom: 28px;
+}
+.d-step-dot {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  border: 2px solid var(--d-border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 600;
+  color: var(--d-muted);
+  flex-shrink: 0;
+  transition: border-color 0.2s, background 0.2s, color 0.2s;
+}
+.d-step-dot.d-step-active { border-color: var(--d-gold); background: var(--d-gold-10); color: var(--d-gold); }
+.d-step-dot.d-step-done { border-color: var(--d-green); background: var(--d-green-10); color: var(--d-green); }
+.d-step-line {
+  flex: 1;
+  height: 1px;
+  background: var(--d-border);
+  margin: 0 6px;
+  min-width: 24px;
+}
+.d-step-line.d-step-done-line { background: var(--d-green); }
+
+/* ── Filter pills ────────────────────────────────────────────────────────── */
+.d-pill {
+  padding: 5px 13px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  border: 1px solid var(--d-border);
+  background: transparent;
+  color: var(--d-muted);
+  transition: all 0.12s;
+  white-space: nowrap;
+}
+.d-pill:hover { color: var(--d-text); border-color: var(--d-muted); }
+.d-pill.d-pill-active { background: var(--d-gold-10); border-color: var(--d-gold); color: var(--d-gold); }
+
+/* ── Divider ─────────────────────────────────────────────────────────────── */
+.d-divider { border: none; border-top: 1px solid var(--d-border); margin: 0; }
+
+/* ── Identity row ────────────────────────────────────────────────────────── */
+.d-id-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--d-border-sub);
+}
+.d-id-row:last-of-type { border-bottom: none; }
+
+/* ── Alert / notice ──────────────────────────────────────────────────────── */
+.d-alert {
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.d-alert-warn { background: var(--d-gold-10); border: 1px solid var(--d-gold-20); color: var(--d-gold); }
+.d-alert-error { background: var(--d-red-10); border: 1px solid var(--d-red); color: var(--d-red); }
+.d-alert-info { background: rgba(88,166,255,0.08); border: 1px solid rgba(88,166,255,0.2); color: var(--d-blue); }
+
+/* ── Scrollbar ───────────────────────────────────────────────────────────── */
+.d-root * {
+  scrollbar-width: thin;
+  scrollbar-color: var(--d-border) transparent;
+}
